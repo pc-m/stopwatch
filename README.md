@@ -1,5 +1,7 @@
 A precise, efficient stopwatch command line application.
 
+It's currently in development. But it's usable. After all, it's just a stopwatch.
+
 # Build it
 
 ```
