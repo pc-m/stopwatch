@@ -14,7 +14,7 @@ $(TARGET): $(OBJECTS)
 
 install: $(TARGET)
 	mkdir -p $(DESTDIR)/usr/local/bin
-	install -m 644 $(TARGET) $(DESTDIR)/usr/local/bin
+	install -m 755 $(TARGET) $(DESTDIR)/usr/local/bin
 
 clean:
 	rm -f $(OBJECTS)
