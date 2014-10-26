@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -21,6 +22,7 @@
 #include "stopwatch.h"
 
 #define NSEC_PER_MSEC 1000000L
+#define NSEC_PER_DECISEC 100000000L
 
 struct output {
 	void (*init)(void);
@@ -67,11 +69,103 @@ static const struct output notty_output = {
 	.update = notty_output_update,
 };
 
+static int parse_time_interval(const char *value, struct timespec *result)
+{
+	long integer_part = 0;
+	long fractional_part = 0;
+	long weight;
+	int i = 0;
+
+	/* parse integer part */
+	for (; isdigit(value[i]); i++) {
+		integer_part = integer_part * 10 + value[i] - '0';
+	}
+
+	switch (value[i]) {
+	case '.':
+		i++;
+		break;
+	case '\0':
+		if (i == 0) {
+			return -1;
+		}
+
+		goto success;
+	default:
+		return -1;
+	}
+
+	/* parse fractional part */
+	weight = NSEC_PER_DECISEC;
+	for (; isdigit(value[i]); i++) {
+		fractional_part = fractional_part + (value[i] - '0') * weight;
+
+		weight = weight / 10;
+		if (weight == 0) {
+			goto success;
+		}
+	}
+
+	switch (value[i]) {
+	case '\0':
+		if (i == 1) {
+			return -1;
+		}
+
+		break;
+	default:
+		return -1;
+	}
+
+success:
+	result->tv_sec = integer_part;
+	result->tv_nsec = fractional_part;
+
+	return 0;
+}
+
+static void usage(const char *prog_name)
+{
+	fprintf(stderr, "usage: %s [-d delay]\n", prog_name);
+
+	exit(1);
+}
+
 static void parse_args(int argc, char *argv[], struct timespec *refresh_interval)
 {
-	/* TODO implement more seriously */
+	int opt;
+
+	/* set default value */
 	refresh_interval->tv_sec = 0;
 	refresh_interval->tv_nsec = 100L * NSEC_PER_MSEC;
+
+	while ((opt = getopt(argc, argv, ":d:h")) != -1)
+	{
+		switch (opt) {
+		case 'd':
+			if (parse_time_interval(optarg, refresh_interval)) {
+				fprintf(stderr, "invalid value for option -%c: %s\n", opt, optarg);
+				usage(argv[0]);
+			}
+			break;
+		case 'h':
+			usage(argv[0]);
+			break;
+		case '?':
+			fprintf(stderr, "unrecognized option -%c\n", optopt);
+			usage(argv[0]);
+			break;
+		case ':':
+			fprintf(stderr, "option -%c requires an argument\n", optopt);
+			usage(argv[0]);
+			break;
+		}
+	}
+
+	if (optind != argc) {
+		fprintf(stderr, "unexpected argument\n");
+		usage(argv[0]);
+	}
 }
 
 int main(int argc, char *argv[])
