@@ -15,8 +15,10 @@
  */
 
 #include <ctype.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/select.h>
 #include <unistd.h>
 
 #include "stopwatch.h"
@@ -28,6 +30,8 @@ struct output {
 	void (*init)(void);
 	void (*update)(const struct timespec *ts);
 };
+
+static volatile sig_atomic_t sigint_delivered = 0;
 
 static void tty_output_init(void)
 {
@@ -168,12 +172,20 @@ static void parse_args(int argc, char *argv[], struct timespec *refresh_interval
 	}
 }
 
+static void sigint_handler(int signum)
+{
+	sigint_delivered = 1;
+}
+
 int main(int argc, char *argv[])
 {
 	struct stopwatch watch;
 	struct timespec curr_time;
 	struct timespec refresh_interval;
 	struct output output;
+	struct sigaction sa;
+	sigset_t sigmask;
+	sigset_t sigmask_orig;
 
 	if (isatty(fileno(stdout))) {
 		output = tty_output;
@@ -191,13 +203,28 @@ int main(int argc, char *argv[])
 	}
 
 	stopwatch_start(&watch);
-	for (;;) {
-		nanosleep(&refresh_interval, NULL);
+
+	sigemptyset(&sa.sa_mask);
+	sa.sa_handler = sigint_handler;
+	sa.sa_flags = 0;
+	if (sigaction(SIGINT, &sa, NULL) == -1) {
+		fprintf(stderr, "couldn't install SIGINT handler\n");
+		return -1;
+	}
+
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask, SIGINT);
+	sigprocmask(SIG_BLOCK, &sigmask, &sigmask_orig);
+
+	while (!sigint_delivered) {
+		pselect(0, NULL, NULL, NULL, &refresh_interval, &sigmask_orig);
 
 		stopwatch_get_time(&watch, &curr_time);
 
 		output.update(&curr_time);
 	}
+
+	putchar('\n');
 
 	return 0;
 }
