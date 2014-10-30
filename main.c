@@ -15,6 +15,7 @@
  */
 
 #include <ctype.h>
+#include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -212,14 +213,14 @@ int main(int argc, char *argv[])
 	sevp.sigev_notify = SIGEV_SIGNAL;
 	sevp.sigev_signo = TIMER_SIGNAL;
 	if (timer_create(CLOCKID, &sevp, &refresh_timer) == -1) {
-		fprintf(stderr, "could't init refresh timer\n");
+		perror("error while calling timer_create");
 		return -1;
 	}
 
 	timer_spec.it_interval = refresh_interval;
 	timer_spec.it_value = refresh_interval;
 	if (timer_settime(&refresh_timer, 0, &timer_spec, NULL) == -1) {
-		fprintf(stderr, "could't init refresh timer\n");
+		perror("error while calling timer_settime");
 		return -1;
 	}
 
@@ -227,7 +228,7 @@ int main(int argc, char *argv[])
 	while (curr_signal != SIGINT) {
 		curr_signal = sigwaitinfo(&sigmask, NULL);
 		if (curr_signal == -1) {
-			fprintf(stderr, "error calling sigwaitinfo\n");
+			perror("error while calling sigwaitinfo");
 			return -1;
 		}
 
