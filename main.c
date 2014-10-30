@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
 
 	timer_spec.it_interval = refresh_interval;
 	timer_spec.it_value = refresh_interval;
-	if (timer_settime(&refresh_timer, 0, &timer_spec, NULL) == -1) {
+	if (timer_settime(refresh_timer, 0, &timer_spec, NULL) == -1) {
 		perror("error while calling timer_settime");
 		return -1;
 	}
