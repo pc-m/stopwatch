@@ -22,17 +22,21 @@
 struct stopwatch {
 	struct timespec start_time;
 	struct timespec total_time;
+	clockid_t clock_id;
 	int running;
 };
 
 /*
  * Initialize a stopwatch.
  *
+ * Use the clock clock_id to mesure the elapsed time. It is recommended to use a
+ * monotonic clock. The CLOCK_MONOTONIC clock is a good default.
+ *
  * The stopwatch starts in the non-running state.
  *
  * Return 0 on success, non-zero on failure.
  */
-int stopwatch_init(struct stopwatch *watch);
+int stopwatch_init(struct stopwatch *watch, clockid_t clock_id);
 
 /*
  * Start the stopwatch.

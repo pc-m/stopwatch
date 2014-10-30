@@ -46,17 +46,22 @@ static inline struct timespec timespec_add(struct timespec lhs, struct timespec 
 	return res;
 }
 
-int stopwatch_init(struct stopwatch *watch)
+static int is_clock_supported(clockid_t clock_id)
 {
 	struct timespec test;
 
-	/* check if clock is supported on this system */
-	if (clock_gettime(CLOCK_MONOTONIC, &test) == -1) {
+	return clock_gettime(clock_id, &test) == 0;
+}
+
+int stopwatch_init(struct stopwatch *watch, clockid_t clock_id)
+{
+	if (!is_clock_supported(clock_id)) {
 		return -1;
 	}
 
 	watch->total_time.tv_sec = 0;
 	watch->total_time.tv_nsec = 0L;
+	watch->clock_id = clock_id;
 	watch->running = 0;
 
 	return 0;
@@ -68,7 +73,7 @@ int stopwatch_start(struct stopwatch *watch)
 		return -1;
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &watch->start_time);
+	clock_gettime(watch->clock_id, &watch->start_time);
 	watch->running = 1;
 
 	return 0;
@@ -83,7 +88,7 @@ static inline struct timespec stopwatch_get_run_time(const struct stopwatch *wat
 {
 	struct timespec now;
 
-	clock_gettime(CLOCK_MONOTONIC, &now);
+	clock_gettime(watch->clock_id, &now);
 
 	return timespec_sub(now, watch->start_time);
 }

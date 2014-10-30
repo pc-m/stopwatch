@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
 
 	parse_args(argc, argv, &refresh_interval);
 
-	if (stopwatch_init(&watch)) {
+	if (stopwatch_init(&watch, CLOCK_MONOTONIC)) {
 		fprintf(stderr, "couldn't init stopwatch\n");
 		return -1;
 	}
