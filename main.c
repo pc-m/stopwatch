@@ -26,12 +26,13 @@
 #define NSEC_PER_MSEC 1000000L
 #define NSEC_PER_DECISEC 100000000L
 
+#define CLOCKID CLOCK_MONOTONIC
+#define TIMER_SIGNAL SIGRTMIN
+
 struct output {
 	void (*init)(void);
 	void (*update)(const struct timespec *ts);
 };
-
-static volatile sig_atomic_t sigint_delivered = 0;
 
 static void tty_output_init(void)
 {
@@ -172,20 +173,17 @@ static void parse_args(int argc, char *argv[], struct timespec *refresh_interval
 	}
 }
 
-static void sigint_handler(int signum)
-{
-	sigint_delivered = 1;
-}
-
 int main(int argc, char *argv[])
 {
 	struct stopwatch watch;
 	struct timespec curr_time;
 	struct timespec refresh_interval;
+	struct itimerspec timer_spec;
 	struct output output;
-	struct sigaction sa;
+	struct sigevent sevp;
 	sigset_t sigmask;
-	sigset_t sigmask_orig;
+	timer_t refresh_timer;
+	int curr_signal;
 
 	if (isatty(fileno(stdout))) {
 		output = tty_output;
@@ -197,34 +195,49 @@ int main(int argc, char *argv[])
 
 	parse_args(argc, argv, &refresh_interval);
 
-	if (stopwatch_init(&watch, CLOCK_MONOTONIC)) {
+	if (stopwatch_init(&watch, CLOCKID)) {
 		fprintf(stderr, "couldn't init stopwatch\n");
 		return -1;
 	}
 
 	stopwatch_start(&watch);
 
-	sigemptyset(&sa.sa_mask);
-	sa.sa_handler = sigint_handler;
-	sa.sa_flags = 0;
-	if (sigaction(SIGINT, &sa, NULL) == -1) {
-		fprintf(stderr, "couldn't install SIGINT handler\n");
+	/* block SIGINT and the signal used for the refresh timer */
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask, SIGINT);
+	sigaddset(&sigmask, TIMER_SIGNAL);
+	sigprocmask(SIG_BLOCK, &sigmask, NULL);
+
+	/* create the refresh timer */
+	sevp.sigev_notify = SIGEV_SIGNAL;
+	sevp.sigev_signo = TIMER_SIGNAL;
+	if (timer_create(CLOCKID, &sevp, &refresh_timer) == -1) {
+		fprintf(stderr, "could't init refresh timer\n");
 		return -1;
 	}
 
-	sigemptyset(&sigmask);
-	sigaddset(&sigmask, SIGINT);
-	sigprocmask(SIG_BLOCK, &sigmask, &sigmask_orig);
+	timer_spec.it_interval = refresh_interval;
+	timer_spec.it_value = refresh_interval;
+	if (timer_settime(&refresh_timer, 0, &timer_spec, NULL) == -1) {
+		fprintf(stderr, "could't init refresh timer\n");
+		return -1;
+	}
 
-	while (!sigint_delivered) {
-		pselect(0, NULL, NULL, NULL, &refresh_interval, &sigmask_orig);
+	curr_signal = 0;
+	while (curr_signal != SIGINT) {
+		curr_signal = sigwaitinfo(&sigmask, NULL);
+		if (curr_signal == -1) {
+			fprintf(stderr, "error calling sigwaitinfo\n");
+			return -1;
+		}
 
 		stopwatch_get_time(&watch, &curr_time);
-
 		output.update(&curr_time);
 	}
 
 	putchar('\n');
+
+	/* XXX could delete the timer, but process is terminating anyway */
 
 	return 0;
 }
