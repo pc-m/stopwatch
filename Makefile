@@ -11,7 +11,7 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) $(LDLIBS) -o $@
 
 %.o: %.c $(HEADERS)
-	$(CC) -c $(CFLAGS) -o $@ $<
+	$(CC) -c $(CFLAGS) $< -o $@
 
 install: $(TARGET)
 	mkdir -p $(DESTDIR)/usr/local/bin
