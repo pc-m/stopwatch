@@ -30,51 +30,6 @@
 #define CLOCKID CLOCK_MONOTONIC
 #define TIMER_SIGNAL SIGRTMIN
 
-struct output {
-	void (*init)(void);
-	void (*update)(const struct timespec *ts);
-};
-
-static void tty_output_init(void)
-{
-	setvbuf(stdout, NULL, _IONBF, 0);
-}
-
-static void tty_output_update(const struct timespec *ts)
-{
-	int ms = ts->tv_nsec / NSEC_PER_MSEC;
-	int s = ts->tv_sec % 60;
-	int m = ts->tv_sec / 60 % 60;
-	int h = ts->tv_sec / 3600;
-
-	printf("%d:%02d'%02d\"%03d\r", h, m, s, ms);
-}
-
-static void notty_output_init(void)
-{
-	setvbuf(stdout, NULL, _IOLBF, 0);
-}
-
-static void notty_output_update(const struct timespec *ts)
-{
-	int ms = ts->tv_nsec / NSEC_PER_MSEC;
-	int s = ts->tv_sec % 60;
-	int m = ts->tv_sec / 60 % 60;
-	int h = ts->tv_sec / 3600;
-
-	printf("%d:%02d'%02d\"%03d\n", h, m, s, ms);
-}
-
-static const struct output tty_output = {
-	.init = tty_output_init,
-	.update = tty_output_update,
-};
-
-static const struct output notty_output = {
-	.init = notty_output_init,
-	.update = notty_output_update,
-};
-
 static int parse_time_interval(const char *value, struct timespec *result)
 {
 	long integer_part = 0;
@@ -174,25 +129,33 @@ static void parse_args(int argc, char *argv[], struct timespec *refresh_interval
 	}
 }
 
+static void output_init(void)
+{
+	setvbuf(stdout, NULL, _IONBF, 0);
+}
+
+static void output_update(const struct timespec *ts)
+{
+	int ms = ts->tv_nsec / NSEC_PER_MSEC;
+	int s = ts->tv_sec % 60;
+	int m = ts->tv_sec / 60 % 60;
+	int h = ts->tv_sec / 3600;
+
+	printf("%d:%02d'%02d\"%03d\r", h, m, s, ms);
+}
+
 int main(int argc, char *argv[])
 {
 	struct stopwatch watch;
 	struct timespec curr_time;
 	struct timespec refresh_interval;
 	struct itimerspec timer_spec;
-	struct output output;
 	struct sigevent sevp;
 	sigset_t sigmask;
 	timer_t refresh_timer;
 	int curr_signal;
 
-	if (isatty(fileno(stdout))) {
-		output = tty_output;
-	} else {
-		output = notty_output;
-	}
-
-	output.init();
+	output_init();
 
 	parse_args(argc, argv, &refresh_interval);
 
@@ -224,8 +187,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	curr_signal = 0;
-	while (curr_signal != SIGINT) {
+	do {
 		curr_signal = sigwaitinfo(&sigmask, NULL);
 		if (curr_signal == -1) {
 			perror("error while calling sigwaitinfo");
@@ -233,8 +195,8 @@ int main(int argc, char *argv[])
 		}
 
 		stopwatch_get_time(&watch, &curr_time);
-		output.update(&curr_time);
-	}
+		output_update(&curr_time);
+	} while (curr_signal != SIGINT);
 
 	putchar('\n');
 
