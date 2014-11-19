@@ -30,6 +30,11 @@
 #define CLOCKID CLOCK_MONOTONIC
 #define TIMER_SIGNAL SIGRTMIN
 
+struct config {
+	struct timespec refresh_interval;
+	int quiet;
+};
+
 static int parse_time_interval(const char *value, struct timespec *result)
 {
 	long integer_part = 0;
@@ -92,20 +97,22 @@ static void usage(const char *prog_name)
 	exit(1);
 }
 
-static void parse_args(int argc, char *argv[], struct timespec *refresh_interval, int *quiet)
+static void config_set_default(struct config *config)
+{
+	config->refresh_interval.tv_sec = 0;
+	config->refresh_interval.tv_nsec = 100L * NSEC_PER_MSEC;
+	config->quiet = 0;
+}
+
+static void config_parse_args(struct config *config, int argc, char *argv[])
 {
 	int opt;
-
-	/* set default value */
-	refresh_interval->tv_sec = 0;
-	refresh_interval->tv_nsec = 100L * NSEC_PER_MSEC;
-	*quiet = 0;
 
 	while ((opt = getopt(argc, argv, ":d:hq")) != -1)
 	{
 		switch (opt) {
 		case 'd':
-			if (parse_time_interval(optarg, refresh_interval)) {
+			if (parse_time_interval(optarg, &config->refresh_interval)) {
 				fprintf(stderr, "invalid value for option -%c: %s\n", opt, optarg);
 				usage(argv[0]);
 			}
@@ -114,7 +121,7 @@ static void parse_args(int argc, char *argv[], struct timespec *refresh_interval
 			usage(argv[0]);
 			break;
 		case 'q':
-			*quiet = 1;
+			config->quiet = 1;
 			break;
 		case '?':
 			fprintf(stderr, "unrecognized option -%c\n", optopt);
@@ -151,18 +158,18 @@ static void output_update(const struct timespec *ts)
 int main(int argc, char *argv[])
 {
 	struct stopwatch watch;
+	struct config config;
 	struct timespec curr_time;
-	struct timespec refresh_interval;
 	struct itimerspec timer_spec;
 	struct sigevent sevp;
 	sigset_t sigmask;
 	timer_t refresh_timer;
 	int curr_signal;
-	int quiet;
 
 	output_init();
 
-	parse_args(argc, argv, &refresh_interval, &quiet);
+	config_set_default(&config);
+	config_parse_args(&config, argc, argv);
 
 	if (stopwatch_init(&watch, CLOCKID)) {
 		fprintf(stderr, "couldn't init stopwatch\n");
@@ -185,9 +192,9 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	timer_spec.it_interval = refresh_interval;
-	timer_spec.it_value = refresh_interval;
-	if (!quiet) {
+	timer_spec.it_interval = config.refresh_interval;
+	timer_spec.it_value = config.refresh_interval;
+	if (!config.quiet) {
 		if (timer_settime(refresh_timer, 0, &timer_spec, NULL) == -1) {
 			perror("error while calling timer_settime");
 			return -1;
