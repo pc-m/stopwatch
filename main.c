@@ -187,6 +187,7 @@ int main(int argc, char *argv[])
 	/* create the refresh timer */
 	sevp.sigev_notify = SIGEV_SIGNAL;
 	sevp.sigev_signo = TIMER_SIGNAL;
+	sevp.sigev_value.sival_int = 0;
 	if (timer_create(CLOCKID, &sevp, &refresh_timer) == -1) {
 		perror("error while calling timer_create");
 		return -1;
@@ -214,7 +215,7 @@ int main(int argc, char *argv[])
 
 	putchar('\n');
 
-	/* XXX could delete the timer, but process is terminating anyway */
+	timer_delete(refresh_timer);
 
 	return 0;
 }
