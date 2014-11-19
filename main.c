@@ -141,7 +141,7 @@ static void output_update(const struct timespec *ts)
 	int m = ts->tv_sec / 60 % 60;
 	int h = ts->tv_sec / 3600;
 
-	printf("%d:%02d'%02d\"%03d\r", h, m, s, ms);
+	printf("%d:%02d:%02d.%03d\r", h, m, s, ms);
 }
 
 int main(int argc, char *argv[])
