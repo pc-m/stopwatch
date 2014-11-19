@@ -87,20 +87,21 @@ success:
 
 static void usage(const char *prog_name)
 {
-	fprintf(stderr, "usage: %s [-d delay]\n", prog_name);
+	fprintf(stderr, "usage: %s [-d delay] [-q]\n", prog_name);
 
 	exit(1);
 }
 
-static void parse_args(int argc, char *argv[], struct timespec *refresh_interval)
+static void parse_args(int argc, char *argv[], struct timespec *refresh_interval, int *quiet)
 {
 	int opt;
 
 	/* set default value */
 	refresh_interval->tv_sec = 0;
 	refresh_interval->tv_nsec = 100L * NSEC_PER_MSEC;
+	*quiet = 0;
 
-	while ((opt = getopt(argc, argv, ":d:h")) != -1)
+	while ((opt = getopt(argc, argv, ":d:hq")) != -1)
 	{
 		switch (opt) {
 		case 'd':
@@ -111,6 +112,9 @@ static void parse_args(int argc, char *argv[], struct timespec *refresh_interval
 			break;
 		case 'h':
 			usage(argv[0]);
+			break;
+		case 'q':
+			*quiet = 1;
 			break;
 		case '?':
 			fprintf(stderr, "unrecognized option -%c\n", optopt);
@@ -154,10 +158,11 @@ int main(int argc, char *argv[])
 	sigset_t sigmask;
 	timer_t refresh_timer;
 	int curr_signal;
+	int quiet;
 
 	output_init();
 
-	parse_args(argc, argv, &refresh_interval);
+	parse_args(argc, argv, &refresh_interval, &quiet);
 
 	if (stopwatch_init(&watch, CLOCKID)) {
 		fprintf(stderr, "couldn't init stopwatch\n");
@@ -182,9 +187,11 @@ int main(int argc, char *argv[])
 
 	timer_spec.it_interval = refresh_interval;
 	timer_spec.it_value = refresh_interval;
-	if (timer_settime(refresh_timer, 0, &timer_spec, NULL) == -1) {
-		perror("error while calling timer_settime");
-		return -1;
+	if (!quiet) {
+		if (timer_settime(refresh_timer, 0, &timer_spec, NULL) == -1) {
+			perror("error while calling timer_settime");
+			return -1;
+		}
 	}
 
 	do {
